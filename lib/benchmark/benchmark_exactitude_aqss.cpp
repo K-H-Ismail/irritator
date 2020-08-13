@@ -54,7 +54,6 @@ file_output_observe(const irt::observer& obs,
     fmt::print(output->os, "{},{}\n", t, msg.real[0]);
 }
 
-
 struct neuron {
   irt::dynamics_id  sum;
   irt::dynamics_id  integrator;

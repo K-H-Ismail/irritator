@@ -68,9 +68,10 @@ struct neuron
 make_neuron(irt::simulation* sim, long unsigned int i, double quantum) noexcept
 {
   using namespace boost::ut;
-  double tau_lif = 10;
+  double tau_lif = 10.0;
   double Vr_lif = 0.0;
   double Vt_lif = 10.0;
+  double V0 = 20.0;
 
 
   auto& sum_lif = sim->qss1_wsum_2_models.alloc();
@@ -81,7 +82,7 @@ make_neuron(irt::simulation* sim, long unsigned int i, double quantum) noexcept
 
 
   sum_lif.default_input_coeffs[0] = -1.0/tau_lif;
-  sum_lif.default_input_coeffs[1] = 20.0/tau_lif;
+  sum_lif.default_input_coeffs[1] = V0/tau_lif;
   
 
 
@@ -113,7 +114,7 @@ make_neuron(irt::simulation* sim, long unsigned int i, double quantum) noexcept
   // Connections
   expect(sim->connect(cross_lif.y[0], integrator_lif.x[1]) ==
         irt::status::success);
-  expect(sim->connect(cross_lif.y[0], sum_lif.x[0]) ==
+  expect(sim->connect(cross_lif.y[1], sum_lif.x[0]) ==
         irt::status::success);
   expect(sim->connect(integrator_lif.y[0],cross_lif.x[0]) ==
         irt::status::success);     
@@ -147,13 +148,13 @@ void lif_benchmark(double simulation_duration, double quantum)
     file_output fo_a(file_name.c_str());
     expect(fo_a.os != nullptr);
 
-    auto& obs_a = sim.observers.alloc(0.01,
+    auto& obs_a = sim.observers.alloc(0.1,
                                         "A",
                                         static_cast<void*>(&fo_a),
                                         &file_output_initialize,
                                         &file_output_observe,
                                         nullptr);
-    sim.observe(sim.models.get(sim.qss2_integrator_models.get(neuron_model.integrator).id), obs_a);
+    sim.observe(sim.models.get(sim.qss1_integrator_models.get(neuron_model.integrator).id), obs_a);
 
     expect(irt::status::success == sim.initialize(t));
 
@@ -230,11 +231,11 @@ void izhikevich_benchmark(double simulation_duration, double quantum, double a, 
   expect(sim.connect(integrator_a.y[0], cross.x[2]) ==
           irt::status::success);
 
-  expect(sim.connect(cross.y[0], product.x[0]) == irt::status::success);
-  expect(sim.connect(cross.y[0], product.x[1]) == irt::status::success);
+  expect(sim.connect(cross.y[1], product.x[0]) == irt::status::success);
+  expect(sim.connect(cross.y[1], product.x[1]) == irt::status::success);
   expect(sim.connect(product.y[0], sum_c.x[0]) == irt::status::success);
-  expect(sim.connect(cross.y[0], sum_c.x[1]) == irt::status::success);
-  expect(sim.connect(cross.y[0], sum_b.x[1]) == irt::status::success);
+  expect(sim.connect(cross.y[1], sum_c.x[1]) == irt::status::success);
+  expect(sim.connect(cross.y[1], sum_b.x[1]) == irt::status::success);
 
   expect(sim.connect(constant.y[0], sum_c.x[2]) == irt::status::success);
   expect(sim.connect(constant3.y[0], sum_c.x[3]) == irt::status::success);
@@ -242,13 +243,13 @@ void izhikevich_benchmark(double simulation_duration, double quantum, double a, 
   expect(sim.connect(sum_c.y[0], sum_a.x[0]) == irt::status::success);
   // expect(sim.connect(integrator_b.y[0], sum_a.x[1]) ==
   // irt::status::success);
-  expect(sim.connect(cross2.y[0], sum_a.x[1]) == irt::status::success);
+  expect(sim.connect(cross2.y[1], sum_a.x[1]) == irt::status::success);
   expect(sim.connect(sum_a.y[0], integrator_a.x[0]) ==
           irt::status::success);
   expect(sim.connect(cross.y[0], integrator_a.x[1]) ==
           irt::status::success);
 
-  expect(sim.connect(cross2.y[0], sum_b.x[0]) == irt::status::success);
+  expect(sim.connect(cross2.y[1], sum_b.x[0]) == irt::status::success);
   expect(sim.connect(sum_b.y[0], integrator_b.x[0]) ==
           irt::status::success);
 
