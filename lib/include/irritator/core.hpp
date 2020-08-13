@@ -501,26 +501,30 @@ struct message
       , length{ 0 }
     {}
 
-    template<typename... T>
-    constexpr message(T... args) noexcept
-    {
-        if constexpr (are_all_same<double, T...>()) {
-            static_assert(sizeof...(args) <= 3, "double message limited to 3");
-            using unused = double[];
-            length = 0;
-            (void)unused{ 0.0, (real[length++] = args, 0.0)... };
-        }
-    }
+    constexpr message(const double v) noexcept
+      : real{ v, 0., 0. }
+      , length{ 1 }
+    {}
+
+    constexpr message(const double v1, const double v2) noexcept
+      : real{ v1, v2, 0. }
+      , length{ 2 }
+    {}
+
+    constexpr message(const double v1,
+                      const double v2,
+                      const double v3) noexcept
+      : real{ v1, v2, v3 }
+      , length{ 3 }
+    {}
 
     double operator[](const difference_type i) const noexcept
     {
-        irt_assert(i < static_cast<std::ptrdiff_t>(length));
         return real[i];
     }
 
     double& operator[](const difference_type i) noexcept
     {
-        irt_assert(i < static_cast<std::ptrdiff_t>(length));
         return real[i];
     }
 };
@@ -2866,7 +2870,7 @@ using transition_function_t = decltype(
 
 template<class T>
 using observation_function_t =
-  decltype(detail::helper<message (T::*)(time) const, &T::observation>{});
+  decltype(detail::helper<message (T::*)(const time) const, &T::observation>{});
 
 template<class T>
 using initialize_function_t =
@@ -2965,8 +2969,6 @@ struct integrator
                     time t) noexcept
     {
         for (const auto& msg : port_quanta.messages) {
-            irt_assert(msg.size() == 2);
-
             up_threshold = msg.real[0];
             down_threshold = msg.real[1];
 
@@ -2978,8 +2980,6 @@ struct integrator
         }
 
         for (const auto& msg : port_x_dot.messages) {
-            irt_assert(msg.size() == 1);
-
             archive.emplace_back(msg.real[0], t);
 
             if (st == state::wait_for_x_dot)
@@ -2990,8 +2990,6 @@ struct integrator
         }
 
         for (const auto& msg : port_reset.messages) {
-            irt_assert(msg.size() == 1);
-
             reset_value = msg.real[0];
             reset = true;
         }
@@ -3066,7 +3064,7 @@ struct integrator
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         return message(last_output_value);
     }
@@ -3263,9 +3261,9 @@ struct qss1_integrator
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time e) const noexcept
     {
-        return message(X + u * sigma);
+        return message(X + u * e);
     }
 };
 
@@ -3435,9 +3433,9 @@ struct qss2_integrator
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time e) const noexcept
     {
-        return message(X);
+        return X + (u * e) + (mu / 2.0) * (e * e);
     }
 };
 
@@ -3496,7 +3494,7 @@ struct qss3_integrator
         constexpr double pi_div_3 = 1.0471975511965976;
 #endif
 
-        X = X + u * e + (mu * e * e) / 2 + (pu * e * e * e) / 3;
+        X = X + u * e + (mu * e * e) / 2. + (pu * e * e * e) / 3.;
         u = value_x;
         mu = value_slope;
         pu = value_derivative;
@@ -3517,7 +3515,6 @@ struct qss3_integrator
                 auto w = c - b * a / 3. + 2. * a * a * a / 27.;
                 auto i1 = -w / 2.;
                 auto i2 = i1 * i1 + v * v * v / 27.;
-                auto s = 0.;
 
                 if (i2 > 0) {
                     i2 = std::sqrt(i2);
@@ -3533,7 +3530,7 @@ struct qss3_integrator
                     else
                         B = -std::pow(std::abs(B), 1. / 3.);
 
-                    auto s = A + B - a / 3.;
+                    s = A + B - a / 3.;
                     if (s < 0.)
                         s = time_domain<time>::infinity;
                 } else if (i2 == 0.) {
@@ -3771,9 +3768,9 @@ struct qss3_integrator
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time e) const noexcept
     {
-        return message(X);
+        return X + u * e + (mu * e * e) / 2 + (pu * e * e * e) / 3;
     }
 };
 
@@ -3831,12 +3828,13 @@ struct abstract_sum
             for (size_t i = 0; i != PortNumber; ++i) {
                 value += values[i];
                 slope += values[i + PortNumber];
-                derivative = values[i + PortNumber + PortNumber];
+                derivative += values[i + PortNumber + PortNumber];
             }
 
             output_ports.get(y[0]).messages.emplace_front(
               value, slope, derivative);
         }
+
         return status::success;
     }
 
@@ -3879,6 +3877,8 @@ struct abstract_sum
                 if (i_port.messages.empty()) {
                     values[i] += values[i + PortNumber] * e +
                                  values[i + PortNumber + PortNumber] * e * e;
+                    values[i + PortNumber] +=
+                      2 * values[i + PortNumber + PortNumber] * e;
                 } else {
                     for (const auto& msg : i_port.messages) {
                         values[i] = msg[0];
@@ -3895,42 +3895,26 @@ struct abstract_sum
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation([[maybe_unused]] const time e) const noexcept
     {
-        if constexpr (QssLevel == 1) {
-            double value = 0.;
+        double value = 0.;
 
+        if constexpr (QssLevel == 1) {
             for (size_t i = 0; i != PortNumber; ++i)
                 value += values[i];
-
-            return message{ value };
         }
 
-        if constexpr (QssLevel == 2) {
-            double value = 0.;
-            double slope = 0.;
-
-            for (size_t i = 0; i != PortNumber; ++i) {
-                value += values[i];
-                slope += values[i + PortNumber];
-            }
-
-            return message{ value, slope };
+        if constexpr (QssLevel >= 2) {
+            for (size_t i = 0; i != PortNumber; ++i)
+                value += values[i + PortNumber] * e;
         }
 
-        if constexpr (QssLevel == 3) {
-            double value = 0.;
-            double slope = 0.;
-            double derivative = 0.;
-
-            for (size_t i = 0; i != PortNumber; ++i) {
-                value += values[i];
-                slope += values[i + PortNumber];
-                derivative = values[i + PortNumber + PortNumber];
-            }
-
-            return message{ value, slope, derivative };
+        if constexpr (QssLevel >= 3) {
+            for (size_t i = 0; i != PortNumber; ++i)
+                value += values[i + PortNumber + PortNumber] * e * e;
         }
+
+        return message{ value };
     }
 };
 
@@ -4036,7 +4020,7 @@ struct abstract_wsum
                 } else {
                     for (const auto& msg : input_ports.get(x[i]).messages) {
                         values[i] = msg[0];
-                        values[i + PortNumber] = msg.size() > 1 ? msg[1] : 0.0;
+                        values[i + PortNumber] = msg[1];
                         message = true;
                     }
                 }
@@ -4050,12 +4034,13 @@ struct abstract_wsum
                 if (i_port.messages.empty()) {
                     values[i] += values[i + PortNumber] * e +
                                  values[i + PortNumber + PortNumber] * e * e;
+                    values[i + PortNumber] +=
+                      2 * values[i + PortNumber + PortNumber] * e;
                 } else {
                     for (const auto& msg : i_port.messages) {
                         values[i] = msg[0];
-                        values[i + PortNumber] = msg.size() > 1 ? msg[1] : 0;
-                        values[i + PortNumber + PortNumber] =
-                          msg.size() > 2 ? msg[2] : 0;
+                        values[i + PortNumber] = msg[1];
+                        values[i + PortNumber + PortNumber] = msg[2];
                         message = true;
                     }
                 }
@@ -4067,43 +4052,27 @@ struct abstract_wsum
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation([[maybe_unused]] const time e) const noexcept
     {
-        if constexpr (QssLevel == 1) {
-            double value = 0.;
+        double value = 0.;
 
+        if constexpr (QssLevel >= 1) {
             for (int i = 0; i != PortNumber; ++i)
                 value += default_input_coeffs[i] * values[i];
-
-            return message{ value };
         }
 
-        if constexpr (QssLevel == 2) {
-            double value = 0.;
-            double slope = 0.;
-
-            for (int i = 0; i != PortNumber; ++i) {
-                value += default_input_coeffs[i] * values[i];
-                slope += default_input_coeffs[i] * values[i + PortNumber];
-            }
-
-            return message{ value, slope };
+        if constexpr (QssLevel >= 2) {
+            for (int i = 0; i != PortNumber; ++i)
+                value += default_input_coeffs[i] * values[i + PortNumber] * e;
         }
 
-        if constexpr (QssLevel == 3) {
-            double value = 0.;
-            double slope = 0.;
-            double derivative = 0.;
-
-            for (size_t i = 0; i != PortNumber; ++i) {
-                value += default_input_coeffs[i] * values[i];
-                slope += default_input_coeffs[i] * values[i + PortNumber];
-                derivative =
-                  default_input_coeffs[i] * values[i + PortNumber + PortNumber];
-            }
-
-            return message{ value, slope, derivative };
+        if constexpr (QssLevel >= 3) {
+            for (size_t i = 0; i != PortNumber; ++i)
+                value += default_input_coeffs[i] *
+                         values[i + PortNumber + PortNumber] * e * e;
         }
+
+        return message{ value };
     }
 };
 
@@ -4179,10 +4148,10 @@ struct abstract_multiplier
             values[0] = msg[0];
 
             if constexpr (QssLevel >= 2)
-                values[2 + 0] = msg.size() > 1 ? msg[1] : 0.0;
+                values[2 + 0] = msg[1];
 
             if constexpr (QssLevel == 3)
-                values[2 + 2 + 0] = msg.size() > 2 ? msg[2] : 0.0;
+                values[2 + 2 + 0] = msg[2];
         }
 
         for (const auto& msg : input_ports.get(x[1]).messages) {
@@ -4191,10 +4160,10 @@ struct abstract_multiplier
             values[1] = msg[0];
 
             if constexpr (QssLevel >= 2)
-                values[2 + 1] = msg.size() > 1 ? msg[1] : 0.0;
+                values[2 + 1] = msg[1];
 
             if constexpr (QssLevel == 3)
-                values[2 + 2 + 1] = msg.size() > 2 ? msg[2] : 0.0;
+                values[2 + 2 + 1] = msg[2];
         }
 
         if constexpr (QssLevel == 2) {
@@ -4206,31 +4175,32 @@ struct abstract_multiplier
         }
 
         if constexpr (QssLevel == 3) {
-            if (!message_port_0)
+            if (!message_port_0) {
                 values[0] += e * values[2 + 0] + values[2 + 2 + 0] * e * e;
+                values[2 + 0] += 2 * values[2 + 2 + 0] * e;
+            }
 
-            if (!message_port_1)
+            if (!message_port_1) {
                 values[1] += e * values[2 + 1] + values[2 + 2 + 1] * e * e;
+                values[2 + 1] += 2 * values[2 + 2 + 1] * e;
+            }
         }
 
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation([[maybe_unused]] const time e) const noexcept
     {
         if constexpr (QssLevel == 1)
-            return { values[0] * values[1] };
+            return values[0] * values[1];
 
         if constexpr (QssLevel == 2)
-            return { values[0] * values[1],
-                     values[2 + 0] * values[1] + values[2 + 1] * values[0] };
+            return (values[0] + e * values[2 + 0]) *
+                   (values[1] + e * values[2 + 1]);
 
         if constexpr (QssLevel == 3)
-            return { values[0] * values[1],
-                     values[2 + 0] * values[1] + values[2 + 1] * values[0],
-                     values[0] * values[2 + 2 + 1] +
-                       values[2 + 0] * values[2 + 1] +
-                       values[2 + 2 + 0] * values[1] };
+            return (values[0] + e * values[2 + 0] + e * e * values[2 + 2 + 0]) *
+                   (values[1] + e * values[2 + 1] + e * e * values[2 + 2 + 1]);
     }
 };
 
@@ -4333,7 +4303,6 @@ struct quantifier
             double sum = 0.0;
             double nb = 0.0;
             for (const auto& msg : port.messages) {
-                irt_assert(msg.size() == 1);
                 sum += msg.real[0];
                 ++nb;
             }
@@ -4425,7 +4394,7 @@ struct quantifier
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         return message(m_upthreshold, m_downthreshold);
     }
@@ -4619,8 +4588,6 @@ struct adder
 
         for (size_t i = 0; i != PortNumber; ++i) {
             for (const auto& msg : input_ports.get(x[i]).messages) {
-                irt_assert(msg.size() == 1);
-
                 values[i] = msg.real[0];
 
                 have_message = true;
@@ -4633,7 +4600,7 @@ struct adder
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         double ret = 0.0;
 
@@ -4700,8 +4667,6 @@ struct mult
         bool have_message = false;
         for (size_t i = 0; i != PortNumber; ++i) {
             for (const auto& msg : input_ports.get(x[i]).messages) {
-                irt_assert(msg.size() == 1);
-
                 values[i] = msg[0];
                 have_message = true;
             }
@@ -4713,7 +4678,7 @@ struct mult
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         double ret = 1.0;
 
@@ -4755,9 +4720,9 @@ struct counter
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
-        return message(number);
+        return message(static_cast<double>(number));
     }
 };
 
@@ -4801,7 +4766,7 @@ struct generator
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         return message(value);
     }
@@ -4844,7 +4809,7 @@ struct constant
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         return message(value);
     }
@@ -4858,20 +4823,24 @@ struct flow
 
     double default_value = 0.0;
     std::vector<double> default_data;
+    std::vector<double> default_sigmas;
     double default_samplerate = 44100.0;
 
     double value = 0.0;
     std::vector<double> data;
+    std::vector<double> sigmas;
     double samplerate = 44100.0;
+
 
     status initialize(data_array<message, message_id>& /*init*/) noexcept
     {
 
-        sigma = 1.0 / samplerate;
+        samplerate = default_samplerate;
+        sigma = 1.0/samplerate;
 
         value = default_value;
         data = default_data;
-        samplerate = default_samplerate;
+        sigmas = default_sigmas;
 
         return status::success;
     }
@@ -4881,20 +4850,33 @@ struct flow
                       time /*e*/,
                       time /*r*/) noexcept
     {
-        value = data[static_cast<int>(t * samplerate)];
+
+        double accu_sigma = 0;
+        for(int i = 0; i < sigmas.size(); i++ )
+        {
+           accu_sigma += sigmas[i];
+           if(accu_sigma > t)
+           {
+               
+               value =  data[i];
+               sigma = sigmas[i];
+               return status::success;
+           }
+        }
 
         return status::success;
+
     }
 
     status lambda(
       data_array<output_port, output_port_id>& output_ports) noexcept
     {
         output_ports.get(y[0]).messages.emplace_front(value);
-
+        
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         return message(value);
     }
@@ -4929,8 +4911,6 @@ struct accumulator
         for (size_t i = 0; i != PortNumber; ++i) {
             auto& port = input_ports.get(x[i + PortNumber]);
             for (const auto& msg : port.messages) {
-                irt_assert(msg.size() >= 1);
-
                 numbers[i] = msg[0];
             }
         }
@@ -4938,8 +4918,6 @@ struct accumulator
         for (size_t i = 0; i != PortNumber; ++i) {
             auto& port = input_ports.get(x[i]);
             for (const auto& msg : port.messages) {
-                irt_assert(msg.size() >= 1);
-
                 if (msg[0] != 0.0)
                     number += numbers[i];
             }
@@ -4997,30 +4975,22 @@ struct cross
         event = 0.0;
 
         for (const auto& msg : input_ports.get(x[port_threshold]).messages) {
-            irt_assert(msg.size() == 1);
-
             threshold = msg.real[0];
             have_message = true;
         }
 
         for (const auto& msg : input_ports.get(x[port_value]).messages) {
-            irt_assert(msg.size() == 1);
-
             value = msg.real[0];
             have_message_value = true;
             have_message = true;
         }
 
         for (const auto& msg : input_ports.get(x[port_if_value]).messages) {
-            irt_assert(msg.size() == 1);
-
             if_value = msg.real[0];
             have_message = true;
         }
 
         for (const auto& msg : input_ports.get(x[port_else_value]).messages) {
-            irt_assert(msg.size() == 1);
-
             else_value = msg.real[0];
             have_message = true;
         }
@@ -5050,7 +5020,7 @@ struct cross
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*e*/) const noexcept
     {
         return message(value, if_value, else_value);
     }
@@ -5118,7 +5088,7 @@ struct abstract_cross
             sigma = time_domain<time>::infinity;
             if (value[1]) {
                 const auto wakeup = (threshold - value[0]) / value[1];
-                if (wakeup >= 0.)
+                if (wakeup > 0.)
                     sigma = wakeup;
             }
         }
@@ -5127,24 +5097,33 @@ struct abstract_cross
             sigma = time_domain<time>::infinity;
             if (value[1]) {
                 if (value[2]) {
-                    const auto d = value[2] * value[2] - 4 * value[1] -
-                                   (threshold - value[0]);
-                    if (d == 0.) {
-                        const auto wakeup = -value[1] / (2 * value[2]);
-                        if (wakeup >= 0.)
-                            sigma = wakeup;
-                    } else if (d > 0) {
-                        const auto wakeup =
-                          -value[1] +
-                          std::sqrt(value[1] * value[1] -
-                                    4 * value[2] * (threshold - value[0])) /
-                            (2. * value[2]);
-                        if (wakeup >= 0)
-                            sigma = wakeup;
+                    const auto a = value[2];
+                    const auto b = value[1];
+                    const auto c = value[0] - threshold;
+                    const auto d = b * b - 4. * a * c;
+
+                    if (d > 0.) {
+                        const auto x1 = (-b + std::sqrt(d)) / (2. * a);
+                        const auto x2 = (-b - std::sqrt(d)) / (2. * a);
+
+                        if (x1 > 0.) {
+                            if (x2 > 0.) {
+                                sigma = std::min(x1, x2);
+                            } else {
+                                sigma = x1;
+                            }
+                        } else {
+                            if (x2 > 0)
+                                sigma = x2;
+                        }
+                    } if (d == 0.) {
+                        const auto x = -b / (2. * a);
+                        if (x > 0.)
+                            sigma = x;
                     }
                 } else {
                     const auto wakeup = (threshold - value[0]) / value[1];
-                    if (wakeup >= 0.)
+                    if (wakeup > 0.)
                         sigma = wakeup;
                 }
             }
@@ -5163,9 +5142,6 @@ struct abstract_cross
 
         const auto old_else_value = else_value[0];
 
-        // if (t != last_reset)
-        // block_lambda = false;
-
         if (p_threshold.messages.empty() && p_if_value.messages.empty() &&
             p_else_value.messages.empty() && p_value.messages.empty()) {
         }
@@ -5173,45 +5149,51 @@ struct abstract_cross
         if (p_if_value.messages.empty()) {
             if constexpr (QssLevel == 2)
                 if_value[0] += if_value[1] * e;
-            if constexpr (QssLevel == 3)
+            if constexpr (QssLevel == 3) {
                 if_value[0] += if_value[1] * e + if_value[2] * e * e;
+                if_value[1] += 2. * if_value[2] * e;
+            }
         } else {
             for (const auto& msg : p_if_value.messages) {
                 if_value[0] = msg[0];
                 if constexpr (QssLevel >= 2)
-                    if_value[1] = msg.size() > 1 ? msg[1] : 0.;
+                    if_value[1] = msg[1];
                 if constexpr (QssLevel == 3)
-                    if_value[2] = msg.size() > 2 ? msg[2] : 0.;
+                    if_value[2] = msg[2];
             }
         }
 
         if (p_else_value.messages.empty()) {
             if constexpr (QssLevel == 2)
                 else_value[0] += else_value[1] * e;
-            if constexpr (QssLevel == 3)
+            if constexpr (QssLevel == 3) {
                 else_value[0] += else_value[1] * e + else_value[2] * e * e;
+                else_value[1] += 2. * else_value[2] * e;
+            }
         } else {
             for (const auto& msg : p_else_value.messages) {
                 else_value[0] = msg[0];
                 if constexpr (QssLevel >= 2)
-                    else_value[1] = msg.size() > 1 ? msg[1] : 0.;
+                    else_value[1] = msg[1];
                 if constexpr (QssLevel == 3)
-                    else_value[2] = msg.size() > 2 ? msg[2] : 0.;
+                    else_value[2] = msg[2];
             }
         }
 
         if (p_value.messages.empty()) {
             if constexpr (QssLevel == 2)
                 value[0] += value[1] * e;
-            if constexpr (QssLevel == 3)
+            if constexpr (QssLevel == 3) {
                 value[0] += value[1] * e + value[2] * e * e;
+                value[1] += 2. * value[2] * e;
+            }
         } else {
             for (const auto& msg : p_value.messages) {
                 value[0] = msg[0];
                 if constexpr (QssLevel >= 2)
-                    value[1] = msg.size() > 1 ? msg[1] : 0.;
+                    value[1] = msg[1];
                 if constexpr (QssLevel == 3)
-                    value[2] = msg.size() > 2 ? msg[2] : 0.;
+                    value[2] = msg[2];
             }
         }
 
@@ -5225,10 +5207,6 @@ struct abstract_cross
             sigma = time_domain<time>::zero;
         } else
             compute_wake_up();
-
-        if (sigma > 0. && sigma + t == t) {
-            sigma = sigma * 10;
-        }
 
         return status::success;
     }
@@ -5273,7 +5251,7 @@ struct abstract_cross
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*t*/) const noexcept
     {
         return message(value[0], if_value[0], else_value[0]);
     }
@@ -5340,7 +5318,7 @@ struct time_func
         return status::success;
     }
 
-    message observation(time /*t*/) const noexcept
+    message observation(const time /*t*/) const noexcept
     {
         return message(value);
     }
@@ -6513,7 +6491,8 @@ public:
                     observer && observer->observe) {
                     if (observer->time_step == 0.0 ||
                         t - observer->tl >= observer->time_step) {
-                        observer->observe(*observer, t, dyn.observation(t));
+                        observer->observe(
+                          *observer, t, dyn.observation(t - mdl.tl));
                         observer->tl = t;
                     }
                 } else {
@@ -6522,10 +6501,12 @@ public:
             }
         }
 
+        irt_assert(mdl.tn >= t);
+
         mdl.tl = t;
         mdl.tn = t + dyn.sigma;
-
-        assert(mdl.tn >= t);
+        if (dyn.sigma && mdl.tn == t)
+            mdl.tn = std::nextafter(t, t + 1.);
 
         sched.reintegrate(mdl, mdl.tn);
 

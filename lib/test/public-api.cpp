@@ -534,6 +534,8 @@ main()
         {
             irt::message vdouble(1.0);
             expect(vdouble[0] == 1.0);
+            expect(vdouble[1] == 0.0);
+            expect(vdouble[2] == 0.0);
             expect(vdouble.size() == 1_ul);
         }
 
@@ -541,6 +543,7 @@ main()
             irt::message vdouble(0.0, 1.0);
             expect(vdouble[0] == 0.0);
             expect(vdouble[1] == 1.0);
+            expect(vdouble[2] == 0.0);
             expect(vdouble.size() == 2_ul);
         }
 
@@ -1966,10 +1969,9 @@ main()
         do {
             irt::status st = sim.run(t);
             expect(st == irt::status::success);
-        } while (t < 30.); // 140. error!
+        } while (t < 140.);
     };
 
-#if 0
     "lotka_volterra_simulation_qss3"_test = [] {
         fmt::print("lotka_volterra_simulation_qss3\n");
         irt::simulation sim;
@@ -2063,7 +2065,6 @@ main()
             expect(st == irt::status::success);
         } while (t < 15.0);
     };
-#endif
 
     "lif_simulation_qss3"_test = [] {
         fmt::print("lif_simulation_qss3\n");
