@@ -1488,7 +1488,7 @@ main()
         double tau = 10.0;
         double Vt = 1.0;
         double V0 = 10.0;
-        double Vr = -V0;
+        double Vr = 0.0;
 
         sum.default_input_coeffs[0] = -1.0 / tau;
         sum.default_input_coeffs[1] = V0 / tau;
@@ -1575,7 +1575,7 @@ main()
         double tau = 10.0;
         double Vt = 1.0;
         double V0 = 10.0;
-        double Vr = -V0;
+        double Vr = 0.0;
 
         sum.default_input_coeffs[0] = -1.0 / tau;
         sum.default_input_coeffs[1] = V0 / tau;
@@ -2084,7 +2084,7 @@ main()
         double tau = 10.0;
         double Vt = 1.0;
         double V0 = 10.0;
-        double Vr = -V0;
+        double Vr = 0.0;
 
         sum.default_input_coeffs[0] = -1.0 / tau;
         sum.default_input_coeffs[1] = V0 / tau;
@@ -2654,7 +2654,7 @@ main()
         constant_cross.default_value = Vr;
 
         integrator.default_X = 0.0;
-        integrator.default_dQ = 0.0001;
+        integrator.default_dQ = 0.000001;
 
         cross.default_threshold = Vt;
         cross.default_detect_up = false;
@@ -2742,7 +2742,7 @@ main()
         constant_cross.default_value = Vr;
 
         integrator.default_X = 0.0;
-        integrator.default_dQ = 0.0001;
+        integrator.default_dQ = 0.00000001;
 
         cross.default_threshold = Vt;
         cross.default_detect_up = false;
