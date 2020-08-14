@@ -323,23 +323,23 @@ BENCHMARK_P(Izhikevich, QSS2, 1, 1,( double simulation_duration, double quantum,
   izhikevich_benchmark(simulation_duration,quantum,a,b,c,d,I,vini);
 }
 
-BENCHMARK_P_INSTANCE(LIF, QSS2, (1000,1e-2));
+BENCHMARK_P_INSTANCE(LIF, QSS2, (1000,1e-4));
 // Regular spiking (RS)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.02,0.2,-65.0,8.0,10.0,0.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.02,0.2,-65.0,8.0,10.0,0.0));
 // Intrinsical bursting (IB)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.02,0.2,-55.0,4.0,10.0,0.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.02,0.2,-55.0,4.0,10.0,0.0));
 // Chattering spiking (CH)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.02,0.2,-50.0,2.0,10.0,0.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.02,0.2,-50.0,2.0,10.0,0.0));
 // Fast spiking (FS)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.1,0.2,-65.0,2.0,10.0,0.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.1,0.2,-65.0,2.0,10.0,0.0));
 // Thalamo-Cortical (TC)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.02,0.25,-65.0,0.05,10.0,-87.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.02,0.25,-65.0,0.05,10.0,-87.0));
 // Rezonator (RZ)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.1,0.26,-65.0,2.0,10.0,-63.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.1,0.26,-65.0,2.0,10.0,-63.0));
 // Low-threshold spiking (LTS)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.02,0.25,-65.0,2.0,10.0,-63.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.02,0.25,-65.0,2.0,10.0,-63.0));
 // Problematic (P)
-BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-2,0.2,2,-56.0,-16.0,-99.0,0.0));
+BENCHMARK_P_INSTANCE(Izhikevich, QSS2, (1000,1e-4,0.2,2,-56.0,-16.0,-99.0,0.0));
 
 int
 main()
