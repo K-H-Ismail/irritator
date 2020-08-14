@@ -3740,7 +3740,7 @@ struct qss3_integrator
         auto& port_x = input_ports.get(x[port_x_dot]);
         auto& port_r = input_ports.get(x[port_reset]);
 
-        if (port_x.messages.empty() && port_r.messages.empty() && r == 0.0)
+        if (port_x.messages.empty() && port_r.messages.empty())
             irt_return_if_bad(internal());
         else {
             if (!port_r.messages.empty())
@@ -5037,6 +5037,7 @@ struct abstract_cross
     time sigma;
 
     double default_threshold = 0.0;
+    bool default_detect_up = true;
 
     double threshold;
     double if_value[QssLevel];
@@ -5044,7 +5045,7 @@ struct abstract_cross
     double value[QssLevel];
     double last_reset;
     bool reach_threshold;
-    bool block_lambda;
+    bool detect_up;
 
     enum port_name
     {
@@ -5072,7 +5073,7 @@ struct abstract_cross
 
         sigma = time_domain<time>::infinity;
         last_reset = time_domain<time>::infinity;
-        block_lambda = false;
+        detect_up = default_detect_up;
         reach_threshold = false;
 
         return status::success;
@@ -5201,7 +5202,7 @@ struct abstract_cross
 
         reach_threshold = false;
 
-        if (value[0] >= threshold) {
+        if ((detect_up && value[0] >= threshold) || (!detect_up && value[0] <= threshold)) {
             if (t != last_reset) {
                 last_reset = t;
                 reach_threshold = true;
@@ -5220,37 +5221,35 @@ struct abstract_cross
     status lambda(
       data_array<output_port, output_port_id>& output_ports) noexcept
     {
-        if (!block_lambda) {
-            if constexpr (QssLevel == 1) {
-                output_ports.get(y[o_else_value])
-                  .messages.emplace_front(else_value[0]);
-                if (reach_threshold) {
-                    output_ports.get(y[o_if_value])
-                      .messages.emplace_front(if_value[0]);
-                    output_ports.get(y[o_event]).messages.emplace_front(1.0);
-                }
+        if constexpr (QssLevel == 1) {
+            output_ports.get(y[o_else_value])
+                .messages.emplace_front(else_value[0]);
+            if (reach_threshold) {
+                output_ports.get(y[o_if_value])
+                    .messages.emplace_front(if_value[0]);
+                output_ports.get(y[o_event]).messages.emplace_front(1.0);
             }
+        }
 
-            if constexpr (QssLevel == 2) {
-                output_ports.get(y[o_else_value])
-                  .messages.emplace_front(else_value[0], else_value[1]);
-                if (reach_threshold) {
-                    output_ports.get(y[o_if_value])
-                      .messages.emplace_front(if_value[0], if_value[1]);
-                    output_ports.get(y[o_event]).messages.emplace_front(1.0);
-                }
+        if constexpr (QssLevel == 2) {
+            output_ports.get(y[o_else_value])
+                .messages.emplace_front(else_value[0], else_value[1]);
+            if (reach_threshold) {
+                output_ports.get(y[o_if_value])
+                    .messages.emplace_front(if_value[0], if_value[1]);
+                output_ports.get(y[o_event]).messages.emplace_front(1.0);
             }
+        }
 
-            if constexpr (QssLevel == 3) {
-                output_ports.get(y[o_else_value])
-                  .messages.emplace_front(
-                    else_value[0], else_value[1], else_value[2]);
-                if (reach_threshold) {
-                    output_ports.get(y[o_if_value])
-                      .messages.emplace_front(
-                        if_value[0], if_value[1], if_value[2]);
-                    output_ports.get(y[o_event]).messages.emplace_front(1.0);
-                }
+        if constexpr (QssLevel == 3) {
+            output_ports.get(y[o_else_value])
+                .messages.emplace_front(
+                else_value[0], else_value[1], else_value[2]);
+            if (reach_threshold) {
+                output_ports.get(y[o_if_value])
+                    .messages.emplace_front(
+                    if_value[0], if_value[1], if_value[2]);
+                output_ports.get(y[o_event]).messages.emplace_front(1.0);
             }
         }
 
